@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simulador de Consórcio ITAÚ</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #ff8200; color: #fff; text-align: center; margin: 0; padding: 0; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; background: #fff; color: #003366; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: left; }
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; margin-bottom: 5px; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; box-sizing: border-box; }
+        .result { margin-top: 30px; background: #003366; color: #fff; padding: 20px; border-radius: 8px; }
+        .result p { margin: 10px 0; }
+        .btn { background-color: #003366; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; margin-right: 10px; }
+        .btn:hover { background-color: #002244; }
+        h1, h2 { text-align: center; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .comparison-table, .comparison-table th, .comparison-table td { border: 1px solid #003366; }
+        .comparison-table th, .comparison-table td { padding: 10px; text-align: center; }
+        .comparison-table th { background-color: #003366; color: #fff; }
+        .comparison-table td { background-color: #f0f0f0; color: #003366; }
+        @media (max-width: 600px) {
+            .container { padding: 10px; }
+            .btn { width: 100%; margin-bottom: 10px; }
+            .comparison-table th, .comparison-table td { padding: 5px; }
+        }
+    </style>
+</head>
+<body>
+    <img src="Itaú-novo-logotipo-2023.jpg" alt="Logo Itaú" style="width: 150px; margin-bottom: 20px;">
+    <div class="container">
+        <h1>Simulador de Consórcio ITAÚ</h1>
+        <div class="input-group">
+            <label for="nomeCliente">Nome do Cliente (opcional)</label>
+            <input type="text" id="nomeCliente">
+        </div>
+        <div class="input-group">
+            <label for="creditoContratado">Crédito Contratado (R$)</label>
+            <input type="text" id="creditoContratado" value="9600000" oninput="formatCurrencyInput(this)">
+        </div>
+        <div class="input-group">
+            <label for="taxaAdministracao">Taxa de Administração (%)</label>
+            <input type="number" id="taxaAdministracao" value="22">
+        </div>
+        <div class="input-group">
+            <label for="fundoReserva">Fundo de Reserva (%)</label>
+            <input type="number" id="fundoReserva" value="3">
+        </div>
+        <div class="input-group">
+            <label for="percentualLance">Percentual de Lance Embutido (%)</label>
+            <input type="number" id="percentualLance" value="30">
+        </div>
+        <div class="input-group">
+            <label for="lanceRecursosProprios">Lance de Recursos Próprios</label>
+            <select id="tipoLance">
+                <option value="valor">Valor (R$)</option>
+                <option value="percentual">Percentual (%)</option>
+            </select>
+            <input type="text" id="lanceRecursosProprios" value="0" oninput="formatLanceInput()">
+        </div>
+        <div class="input-group">
+            <label for="prazo">Prazo (meses)</label>
+            <input type="number" id="prazo" value="150">
+        </div>
+        <div class="input-group">
+            <input type="checkbox" id="reduzirPrazo" name="reduzirPrazo">
+            <label for="reduzirPrazo">Reduzir quantidade de parcelas</label>
+        </div>
+        <div style="text-align: center;">
+            <button class="btn" onclick="calcular()">Calcular</button>
+            <button class="btn" onclick="gerarSimulacao()">Gerar Simulação</button>
+        </div>
+        <div class="result" id="result">
+            <h2>Resultados</h2>
+            <p>Nome do Cliente: <span id="resultadoNomeCliente"></span></p>
+            <p>Saldo Devedor: R$ <span id="saldoDevedor">0</span></p>
+            <p>Lance Embutido: R$ <span id="lanceEmbutido">0</span> (<span id="percentualLanceEmbutido">0</span>%)</p>
+            <p>Lance de Recursos Próprios: R$ <span id="lanceRecursosPropriosTotal">0</span> (<span id="percentualLanceRecursosProprios">0</span>%)</p>
+            <p>Valor do Lance Total: R$ <span id="valorLanceTotal">0</span></p>
+            <p>Representatividade do Lance: <span id="representatividadeLance">0</span>%</p>
+            <p>Resgate: R$ <span id="resgate">0</span></p>
+            <p>Saldo Devedor após Lance: R$ <span id="saldoDevedorAposLance">0</span></p>
+            <p>Parcela Mensal antes da Contemplação: R$ <span id="parcelaAntes">0</span></p>
+            <p>Parcela Mensal após a Contemplação: R$ <span id="parcelaDepois">0</span></p>
+            <p>Quantidade de Parcelas após Contemplação: <span id="parcelasAposLance">0</span></p>
+            <p>Custo Efetivo Total (CET) Mensal: <span id="cetMensal">0</span>%</p>
+            <p>Custo Efetivo Total (CET) Anual: <span id="cetAnual">0</span>%</p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script>
+        function formatCurrency(value) {
+            return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function formatCurrencyInput(input) {
+            let value = input.value.replace(/\D/g, '');
+            input.value = formatCurrency(parseFloat(value) / 100);
+        }
+
+        function formatLanceInput() {
+            let tipoLance = document.getElementById('tipoLance').value;
+            let input = document.getElementById('lanceRecursosProprios');
+            if (tipoLance === 'valor') {
+                formatCurrencyInput(input);
+            }
+        }
+
+        function calcular() {
+            let nomeCliente = document.getElementById('nomeCliente').value;
+            let creditoContratado = parseFloat(document.getElementById('creditoContratado').value.replace(/\D/g, '')) / 100;
+            let taxaAdministracao = parseFloat(document.getElementById('taxaAdministracao').value) / 100;
+            let fundoReserva = parseFloat(document.getElementById('fundoReserva').value) / 100;
+            let percentualLance = parseFloat(document.getElementById('percentualLance').value) / 100;
+            let tipoLance = document.getElementById('tipoLance').value;
+            let lanceRecursosPropriosInput = document.getElementById('lanceRecursosProprios').value;
+            let prazo = parseFloat(document.getElementById('prazo').value);
+            let reduzirPrazo = document.getElementById('reduzirPrazo').checked;
+
+            let saldoDevedor = creditoContratado * (1 + taxaAdministracao + fundoReserva);
+            let lanceEmbutido = saldoDevedor * percentualLance;
+            
+            let lanceRecursosProprios = 0;
+            let percentualLanceRecursosProprios = 0;
+            if (tipoLance === 'percentual') {
+                percentualLanceRecursosProprios = parseFloat(lanceRecursosPropriosInput.replace('%', '')) / 100;
+                lanceRecursosProprios = saldoDevedor * percentualLanceRecursosProprios;
+            } else {
+                lanceRecursosProprios = parseFloat(lanceRecursosPropriosInput.replace(/\D/g, '')) / 100;
+                percentualLanceRecursosProprios = lanceRecursosProprios / saldoDevedor;
+            }
+            
+            let valorLanceTotal = lanceEmbutido + lanceRecursosProprios;
+            let representatividadeLance = (valorLanceTotal / saldoDevedor) * 100;
+            let resgate = creditoContratado - lanceEmbutido;
+            let saldoDevedorAposLance = saldoDevedor - valorLanceTotal;
+            let parcelaAntes = saldoDevedor / prazo;
+            let parcelaDepois = saldoDevedorAposLance / prazo;
+
+            let parcelasAposLance = prazo;
+            if (reduzirPrazo) {
+                parcelasAposLance = Math.ceil(saldoDevedorAposLance / parcelaAntes);
+            } else {
+                parcelaDepois = saldoDevedorAposLance / prazo;
+            }
+
+            // Calculate CET
+            let totalParcelaAntes = parcelaAntes * 1; // Considering contemplation in the first month
+            let totalParcelaDepois = parcelaDepois * (parcelasAposLance - 1);
+            let totalInvestido = totalParcelaAntes + totalParcelaDepois + lanceRecursosProprios;
+            let cetMensal = ((totalInvestido / resgate) - 1) / prazo * 100;
+            let cetAnual = ((Math.pow(1 + cetMensal / 100, 12)) - 1) * 100;
+
+            document.getElementById('resultadoNomeCliente').innerText = nomeCliente;
+            document.getElementById('saldoDevedor').innerText = formatCurrency(saldoDevedor);
+            document.getElementById('lanceEmbutido').innerText = formatCurrency(lanceEmbutido);
+            document.getElementById('percentualLanceEmbutido').innerText = (percentualLance * 100).toFixed(2);
+            document.getElementById('lanceRecursosPropriosTotal').innerText = formatCurrency(lanceRecursosProprios);
+            document.getElementById('percentualLanceRecursosProprios').innerText = (percentualLanceRecursosProprios * 100).toFixed(2);
+            document.getElementById('valorLanceTotal').innerText = formatCurrency(valorLanceTotal);
+            document.getElementById('representatividadeLance').innerText = representatividadeLance.toFixed(2);
+            document.getElementById('resgate').innerText = formatCurrency(resgate);
+            document.getElementById('saldoDevedorAposLance').innerText = formatCurrency(saldoDevedorAposLance);
+            document.getElementById('parcelaAntes').innerText = formatCurrency(parcelaAntes);
+            document.getElementById('parcelaDepois').innerText = formatCurrency(parcelaDepois);
+            document.getElementById('parcelasAposLance').innerText = parcelasAposLance;
+            document.getElementById('cetMensal').innerText = cetMensal.toFixed(2);
+            document.getElementById('cetAnual').innerText = cetAnual.toFixed(2);
+        }
+
+        function gerarSimulacao() {
+            const nomeCliente = document.getElementById('nomeCliente').value;
+            const dataSimulacao = new Date().toLocaleDateString('pt-BR');
+            const saldoDevedor = document.getElementById('saldoDevedor').innerText;
+            const lanceEmbutido = document.getElementById('lanceEmbutido').innerText;
+            const percentualLanceEmbutido = document.getElementById('percentualLanceEmbutido').innerText;
+            const lanceRecursosPropriosTotal = document.getElementById('lanceRecursosPropriosTotal').innerText;
+            const percentualLanceRecursosProprios = document.getElementById('percentualLanceRecursosProprios').innerText;
+            const valorLanceTotal = document.getElementById('valorLanceTotal').innerText;
+            const representatividadeLance = document.getElementById('representatividadeLance').innerText;
+            const resgate = document.getElementById('resgate').innerText;
+            const saldoDevedorAposLance = document.getElementById('saldoDevedorAposLance').innerText;
+            const parcelaAntes = document.getElementById('parcelaAntes').innerText;
+            const parcelaDepois = document.getElementById('parcelaDepois').innerText;
+            const parcelasAposLance = document.getElementById('parcelasAposLance').innerText;
+            const cetMensal = document.getElementById('cetMensal').innerText;
+            const cetAnual = document.getElementById('cetAnual').innerText;
+
+            // Financing calculations
+            const prazoFinanciamento = 360;
+            const resgateValue = parseFloat(resgate.replace(/\D/g, '')) / 100;
+            const valorFinanciado = resgateValue;
+            const taxaJurosMensal = (Math.pow(1 + 0.105, 1 / 12) - 1);
+            const parcelaFinanciamento = valorFinanciado * (taxaJurosMensal / (1 - Math.pow(1 + taxaJurosMensal, -prazoFinanciamento)));
+            const valorTotalFinanciamento = parcelaFinanciamento * prazoFinanciamento;
+
+            // Total payments for consórcio
+            const totalPagoConsorcio = (parseFloat(parcelaDepois.replace(/\D/g, '')) / 100) * parseInt(parcelasAposLance) + parseFloat(valorLanceTotal.replace(/\D/g, '')) / 100;
+
+            // Savings in total amount paid
+            const economiaTotal = valorTotalFinanciamento - totalPagoConsorcio;
+
+            const simulacaoHtml = `
+                <html>
+                <head>
+                    <title>Simulação de Consórcio ITAÚ</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; background-color: #ff8200; color: #fff; text-align: center; }
+                        .container { max-width: 800px; margin: 0 auto; padding: 20px; background: #fff; color: #003366; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: left; }
+                        .result { margin-top: 20px; }
+                        .result p { margin: 10px 0; }
+                        .comparison-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        .comparison-table, .comparison-table th, .comparison-table td { border: 1px solid #003366; }
+                        .comparison-table th, .comparison-table td { padding: 10px; text-align: center; }
+                        .comparison-table th { background-color: #003366; color: #fff; }
+                        .comparison-table td { background-color: #f0f0f0; color: #003366; }
+                    </style>
+                </head>
+                <body>
+                    <img src="${document.querySelector('img').src}" alt="Logo Itaú" style="width: 150px; margin-bottom: 20px;">
+                    <div class="container">
+                        <h1>Simulação de Consórcio ITAÚ</h1>
+                        <div class="result">
+                            <h2>Resultados da Simulação</h2>
+                            <p>São Paulo, ${dataSimulacao}</p>
+                            <p>Ao Sr.: <b>${nomeCliente}</b></p>
+                            <p>Apresentamos proposta de Consórcio utilizando Lance Embutido (do Crédito) e complemento de recursos próprios se necessário, mediante contemplação o valor correspondente ao Lance é amortizado no saldo devedor:</p>
+                            <p>Alternativa 1: reduzindo o prazo da operação</p>
+                            <p>Alternativa 2: reduzindo o valor da prestação mensal.</p>
+                            <p>O Lance é calculado sobre o Saldo Devedor (Crédito Contratado + Taxa Administração + Fundo de Reserva).</p>
+                            <p><b>Saldo Devedor:</b> ${saldoDevedor}</p>
+                            <p><b>Lance Embutido:</b> ${lanceEmbutido} (${percentualLanceEmbutido}%)</p>
+                            <p><b>Lance de Recursos Próprios:</b> ${lanceRecursosPropriosTotal} (${percentualLanceRecursosProprios}%)</p>
+                            <p><b>Valor do Lance Total:</b> ${valorLanceTotal}</p>
+                            <p><b>Representatividade do Lance:</b> ${representatividadeLance}%</p>
+                            <p><b>Resgate:</b> ${resgate}</p>
+                            <p><b>Saldo Devedor após Lance:</b> ${saldoDevedorAposLance}</p>
+                            <p><b>Parcela Mensal antes da Contemplação:</b> ${parcelaAntes}</p>
+                            <p><b>Parcela Mensal após a Contemplação:</b> ${parcelaDepois}</p>
+                            <p><b>Quantidade de Parcelas após Contemplação:</b> ${parcelasAposLance}</p>
+                            <p><b>Custo Efetivo Total (CET) Mensal:</b> ${cetMensal}%</p>
+                            <p><b>Custo Efetivo Total (CET) Anual:</b> ${cetAnual}%</p>
+                        </div>
+                        <div class="result">
+                            <h2>Comparação Consórcio x Financiamento</h2>
+                            <table class="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Consórcio</th>
+                                        <th>Financiamento</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Valor da Parcela</td>
+                                        <td>${parcelaDepois}</td>
+                                        <td>${formatCurrency(parcelaFinanciamento)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Valor Total Pago</td>
+                                        <td>${formatCurrency(totalPagoConsorcio)}</td>
+                                        <td>${formatCurrency(valorTotalFinanciamento)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Economia Total</td>
+                                        <td colspan="2">${formatCurrency(economiaTotal)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Taxa de Juros Efetiva Mensal</td>
+                                        <td>${cetMensal}%</td>
+                                        <td>${(taxaJurosMensal * 100).toFixed(2)}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Taxa de Juros Efetiva Anual</td>
+                                        <td>${cetAnual}%</td>
+                                        <td>10.50%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Prazo (meses)</td>
+                                        <td>${parcelasAposLance}</td>
+                                        <td>${prazoFinanciamento}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const newWindow = window.open();
+            newWindow.document.write(simulacaoHtml);
+            newWindow.document.close();
+        }
+    </script>
+</body>
+</html>
